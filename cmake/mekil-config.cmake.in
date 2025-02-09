@@ -1,0 +1,5 @@
+set(TYPE_TRAIST_MEKIL_VERSION "@PACKAGE_VERSION@")
+find_package(MKL CONFIG REQUIRED PATHS /opt/intel/oneapi/mkl/latest/)
+link_libraries(MKL::MKL)
+message(STATUS "Imported oneMKL targets: ${MKL_IMPORTED_TARGETS}")
+include_directories("@MEKIL_INCLUDE_INSTALL_DIR@")
