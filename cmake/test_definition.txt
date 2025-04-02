@@ -1,0 +1,2 @@
+${CMAKE_BINARY_DIR}/test_CenterCornerFlip
+golden;

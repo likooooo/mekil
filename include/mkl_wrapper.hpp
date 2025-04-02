@@ -1,20 +1,13 @@
 #pragma once
 #include <mkl.h>
 #include <complex>
+#include <type_traist_notebook/type_traist.hpp>
 
 enum class matrix_major
 {
     row_major,
     col_major
 };
-template <class T>
-constexpr static bool is_c = std::is_same_v<std::complex<float>, std::remove_cv_t<T>>;
-template <class T>
-constexpr static bool is_s = std::is_same_v<float, std::remove_cv_t<T>>;
-template <class T>
-constexpr static bool is_d = std::is_same_v<double, std::remove_cv_t<T>>;
-template <class T>
-constexpr static bool is_z = std::is_same_v<std::complex<double>, std::remove_cv_t<T>>;
 
 template <class T>
 inline void CenterCornerFlip(T *image, int widht, int height)
