@@ -5,6 +5,7 @@ namespace uca
 {
     template<class T> void cpu_backend_impl(cpu_backend<T>& cpu)
     {
+        cpu.enable =  true;
         cpu.VtAdd = mekil::VtAdd<T>;
         cpu.integral_x = mekil::integral_x<T>;
         cpu.integral_y = mekil::integral_y<T>;
