@@ -2,6 +2,22 @@
 #include <mkl.h>
 #include <type_traist_notebook/type_traist.hpp>
 
+#ifndef MKL_CALL
+#   define MKL_CALL( call )                                                 \
+    {                                                                       \
+        MKL_LONG status =( call );                                          \
+        if ( status != DFTI_NO_ERROR )                                      \
+            fprintf( stderr,                                                \
+                     "ERROR: MKL call \"%s\" in line %d of file %s failed " \
+                     "with "                                                \
+                     "code (%d).\n",                                        \
+                     #call,                                                 \
+                     __LINE__,                                              \
+                     __FILE__,                                              \
+                     status );                                              \
+    }
+#endif  // CUFFT_CALL
+
 #define REPEAT_CODE(T, s,d, c, z, ...) \
     if constexpr(is_s<T>){s(__VA_ARGS__);} \
     else if constexpr(is_d<T>){d(__VA_ARGS__);} \

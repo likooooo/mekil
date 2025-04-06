@@ -9,6 +9,10 @@ namespace uca
         cpu.VtAdd = mekil::VtAdd<T>;
         cpu.integral_x = mekil::integral_x<T>;
         cpu.integral_y = mekil::integral_y<T>;
+        // cpu.fft =
+        // cpu.fft_outplace =
+        // cpu.ifft =
+        // cpu.ifft_outplace =
     }
     template<> cpu_backend<float>::cpu_backend(){cpu_backend_impl(*this);}
     template<> cpu_backend<double>::cpu_backend(){cpu_backend_impl(*this);}
