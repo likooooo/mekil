@@ -2,6 +2,8 @@ add_library(mekil SHARED cpu_backend.cpp)
 set_target_properties(mekil PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}) 
 target_link_libraries(mekil PUBLIC ${MKL_IMPORTED_TARGETS})
 
+add_executable(test_lanczos test_lanczos.cpp)
+target_link_libraries(test_lanczos PUBLIC mekil)
 
 install(EXPORT mekilTargets
     FILE mekilTargets.cmake
