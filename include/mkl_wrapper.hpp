@@ -13,7 +13,7 @@ enum class matrix_major
     else if constexpr(is_d<T>){cblas_d##func(__VA_ARGS__);} \
     else if constexpr(is_c<T>){cblas_c##func(__VA_ARGS__);} \
     else if constexpr(is_z<T>){cblas_z##func(__VA_ARGS__);} \
-    else{unreachable_constexpr_if{};                   \
+    else{unreachable_constexpr_if();                   \
 }
     
 template<class T> inline void copy_batch_strided(const MKL_INT N,
