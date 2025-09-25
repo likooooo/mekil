@@ -75,7 +75,7 @@ template<class T> [[deprecated("use crop_image instead")]] inline void CropImage
 
 
 template<class T> inline void crop_image(T* output, vec2<size_t> output_shape, vec2<size_t> output_offset, 
-                 const T* input,  vec2<size_t> input_shape,  vec2<size_t> input_offset)
+                 const T* input,  vec2<size_t> input_shape,  vec2<size_t> input_offset, int step_in = 1, int step_out = 1)
 {
     const auto [inputSizeX, inputSizeY] = input_shape;
     const auto [outputSizeX, outputSizeY] = output_shape;
@@ -83,7 +83,43 @@ template<class T> inline void crop_image(T* output, vec2<size_t> output_shape, v
     const auto [offset_x_out, offset_y_out] = output_offset;
     const T* pIn = input + offset_y_in * inputSizeX + offset_x_in;
     T* pOut = output +  offset_y_out * outputSizeX + offset_x_out;
-    copy_batch_strided<T>(std::min(inputSizeX - offset_x_in, outputSizeX - offset_x_out), pIn, 1, inputSizeX, pOut, 1, outputSizeX, std::min(inputSizeY - offset_y_in, outputSizeY - offset_y_out));
+    copy_batch_strided<T>(std::min(inputSizeX - offset_x_in, outputSizeX - offset_x_out), pIn, step_in, inputSizeX, pOut, step_out, outputSizeX, std::min(inputSizeY - offset_y_in, outputSizeY - offset_y_out));
+}
+template<class TFrom, class TTo> inline void crop_to(TTo* output, vec2<size_t> output_shape, vec2<size_t> output_offset, 
+                 const TFrom* input,  vec2<size_t> input_shape,  vec2<size_t> input_offset)
+{
+    static_assert(std::is_standard_layout_v<TFrom> && std::is_standard_layout_v<TTo>);
+    constexpr int min_pixel_size = std::min(sizeof(TFrom), sizeof(TTo));
+
+    constexpr int element_count_from = sizeof(TFrom) / min_pixel_size;
+    constexpr int element_count_to = sizeof(TTo) / min_pixel_size;
+    static_assert(element_count_from * min_pixel_size == sizeof(TFrom));
+    static_assert(element_count_to   * min_pixel_size == sizeof(TTo));
+    static_assert(element_count_from == 1 || element_count_to == 1);
+
+    output_shape[0] *= element_count_to;
+    output_offset[0] *= element_count_to;
+    input_shape[0] *= element_count_from;
+    input_offset[0] *= element_count_from;
+    auto crop = [&](auto t){
+        using T = decltype(t);
+        crop_image<T>(reinterpret_cast<T*>(output), output_shape, output_offset,
+                     reinterpret_cast<const T*>(input), input_shape, input_offset, element_count_from, element_count_to
+        );
+    };
+
+    if constexpr(sizeof(float) == min_pixel_size){
+        crop(float());
+    }
+    else if constexpr(sizeof(double) == min_pixel_size){
+        crop(double());
+    }
+    else if constexpr(sizeof(std::complex<double>) == min_pixel_size){
+        crop(std::complex<double>());
+    }
+    else{
+        unreachable_constexpr_if();
+    }
 }
 
 template<class T> inline void VecDiv(int n, T*a, T*b, T* y)

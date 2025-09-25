@@ -61,8 +61,27 @@ void test_complex_decompose()
         }
     }
 }
-
-int test_crop_domain() 
+void test_crop_to()
+{
+    std::array<vec2<size_t>, 4> shape_case{
+        vec2<size_t>{3, 233},
+        vec2<size_t>{217, 73},
+        vec2<size_t>{1, 67},
+        vec2<size_t>{367, 1},
+    };
+    for(const auto& shape : shape_case){
+        auto input =  complex_decompse<float>::random_complex({int(shape[0]), int(shape[1])});
+        std::vector<float> output(input.size());
+        crop_to<std::complex<float>, float>(output.data(), shape, {0, 0}, input.data(), shape, {0, 0});
+        for(size_t i = 0; i < output.size(); i++)  assert(output.at(i) == input.at(i).real());
+        crop_to<std::complex<float>, float>(output.data(), shape, {0, 0}, 
+            reinterpret_cast<const std::complex<float>*>(reinterpret_cast<const float*>(input.data()) + 1), 
+            shape, {0, 0}
+        );
+        for(size_t i = 0; i < output.size(); i++)  assert(output.at(i) == input.at(i).imag());
+    }
+}
+int test_crop_image() 
 {
     auto print_image = [](const std::vector<double>& img, int width, int height) {
         for(int y = 0; y < height; y++) {
@@ -114,7 +133,8 @@ int test_crop_domain()
 
 int main()
 {
-    // test_complex_decompose();
-    test_crop_domain();
+    test_crop_to();
+    test_crop_image();
+    test_complex_decompose();
     std::cout << "all test done\n";
 }
