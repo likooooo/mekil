@@ -8,7 +8,22 @@ enum class matrix_major
     row_major,
     col_major
 };
-
+#define CBLAS_REPEAT_CODE(T, func, ...) \
+    if      constexpr(is_s<T>){cblas_s##func(__VA_ARGS__);} \
+    else if constexpr(is_d<T>){cblas_d##func(__VA_ARGS__);} \
+    else if constexpr(is_c<T>){cblas_c##func(__VA_ARGS__);} \
+    else if constexpr(is_z<T>){cblas_z##func(__VA_ARGS__);} \
+    else{unreachable_constexpr_if{};                   \
+}
+    
+template<class T> inline void copy_batch_strided(const MKL_INT N,
+                               const T *X, const MKL_INT incX, const MKL_INT stridex,
+                               T *Y, const MKL_INT incY, const MKL_INT stridey,
+                               const MKL_INT batch_size)
+{
+    CBLAS_REPEAT_CODE(T, copy_batch_strided, N, X, incX, stridex, Y, incY, stridey, batch_size);
+    
+}
 template <class T>
 inline void CenterCornerFlip(T *image, int widht, int height)
 {
@@ -50,13 +65,27 @@ inline void CenterCornerFlip(T *image, int widht, int height)
         pC += sizeX;
     }
 }
-template<class T>inline void CropImage(T* pOut, const int ostride, const T* pIn, const int istride, const int sizex, const int sizey)
+
+template<class T> [[deprecated("use crop_image instead")]] inline void CropImage(T* pOut, const int ostride, const T* pIn, const int istride, const int sizex, const int sizey)
 {
-    if constexpr (is_s<T>) cblas_scopy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
-    else if constexpr (is_d<T>) cblas_dcopy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
-    else if constexpr (is_c<T>) cblas_ccopy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
-    else if constexpr (is_z<T>) cblas_zcopy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
+    //== 如果 crop image 包含最后一个元素，存在pOut越界的情况。(sizey 包含 pOut的最后一行)
+    // 可以从小的image 拷贝到大的， 反过来的话是不安全的
+    copy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
 }
+
+
+template<class T> inline void crop_image(T* output, vec2<size_t> output_shape, vec2<size_t> output_offset, 
+                 const T* input,  vec2<size_t> input_shape,  vec2<size_t> input_offset)
+{
+    const auto [inputSizeX, inputSizeY] = input_shape;
+    const auto [outputSizeX, outputSizeY] = output_shape;
+    const auto [offset_x_in, offset_y_in] = input_offset;
+    const auto [offset_x_out, offset_y_out] = output_offset;
+    const T* pIn = input + offset_y_in * inputSizeX + offset_x_in;
+    T* pOut = output +  offset_y_out * outputSizeX + offset_x_out;
+    copy_batch_strided<T>(std::min(inputSizeX - offset_x_in, outputSizeX - offset_x_out), pIn, 1, inputSizeX, pOut, 1, outputSizeX, std::min(inputSizeY - offset_y_in, outputSizeY - offset_y_out));
+}
+
 template<class T> inline void VecDiv(int n, T*a, T*b, T* y)
 {
     if constexpr(is_s<T>)
