@@ -6,15 +6,16 @@
 #   define MKL_CALL( call )                                                 \
     {                                                                       \
         MKL_LONG status =( call );                                          \
-        if ( status != DFTI_NO_ERROR )                                      \
+        if (status!=DFTI_NO_ERROR&&!DftiErrorClass(status, DFTI_NO_ERROR))  \
             fprintf( stderr,                                                \
                      "ERROR: MKL call \"%s\" in line %d of file %s failed " \
                      "with "                                                \
-                     "code (%lld).\n",                                        \
+                     "code (%lld).\n%s\n",                                  \
                      #call,                                                 \
                      __LINE__,                                              \
                      __FILE__,                                              \
-                     status );                                              \
+                     status,                                                \
+                     DftiErrorMessage(status) );                            \
     }
 #endif  // CUFFT_CALL
 

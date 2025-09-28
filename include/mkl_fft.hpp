@@ -2,6 +2,7 @@
 #include <mkl.h>
 #include "mkl_basic_operator.h"
 #include <type_traist_notebook/type_traist.hpp>
+#include <mkl_dfti.h>
 
 namespace mekil
 {
@@ -38,8 +39,12 @@ namespace mekil
         static pPlan_t make_row_major_plan(const std::vector<MKL_LONG>& row_major_dims, int batch_size=1)
         {
             pPlan_t pPlan(new DFTI_DESCRIPTOR_HANDLE, mkl_fft_plan_deleter());
-
-            MKL_CALL(DftiCreateDescriptor(pPlan.get(), dft_precision, domain, row_major_dims.size(), row_major_dims.data()));
+            if(row_major_dims.size() == 1){
+                MKL_CALL(DftiCreateDescriptor(pPlan.get(), dft_precision, domain, 1, row_major_dims.front()));
+            }
+            else{
+                MKL_CALL(DftiCreateDescriptor(pPlan.get(), dft_precision, domain, row_major_dims.size(), row_major_dims.data()));
+            }
             if(batch_size > 1){
                 MKL_CALL(DftiSetValue(*pPlan, DFTI_NUMBER_OF_TRANSFORMS, batch_size));
             }
@@ -49,6 +54,7 @@ namespace mekil
 
         static pPlan_t make_plan(std::vector<MKL_LONG> col_major_dims, int batch_size=1)
         {
+            if(col_major_dims.back() <= 1) col_major_dims.pop_back();
             std::reverse(col_major_dims.begin(), col_major_dims.end());
             return make_row_major_plan(col_major_dims, batch_size);
         }

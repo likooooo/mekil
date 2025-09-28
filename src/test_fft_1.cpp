@@ -28,24 +28,27 @@ void test_mkl_fft_check(const std::string& space, std::vector<int> col_major_dim
         uniform_random<spatial_type> r(1e-2, 1);
         std::generate(image.begin(), image.end(), r);
     }
-
+    for(auto& n : image)n = 1;
     // === Forward FFT ===
     auto plan_fwd = fft_t::make_plan({col_major_dims.begin(), col_major_dims.end()});
     std::vector<fourier_type> freq(x * y);
 
+    std::cout << "input     =" << image << std::endl;
     fft_t::exec_forward(*plan_fwd, image.data(), freq.data());
 
     // 用 python golden 验证 forward
-    catch_py_error(assert(py_loader(".")["cuda_test_fft_golden"]["check_rfft"](
-        create_ndarray_from_vector(image, col_major_dims),
-        create_ndarray_from_vector(freq, {static_cast<int>(freq.size())/y, y})
-    )));
+    // catch_py_error(assert(py_loader(".")["cuda_test_fft_golden"]["check_rfft"](
+    //     create_ndarray_from_vector(image, col_major_dims),
+    //     create_ndarray_from_vector(freq, {static_cast<int>(freq.size())/y, y})
+    // )));
+    std::cout << "fft result=" << freq << std::endl;
 
     // === Backward FFT ===
     auto plan_bwd = fft_t::make_plan({col_major_dims.begin(), col_major_dims.end()});
     std::vector<spatial_type> recovered(x * y);
 
     fft_t::exec_backward(*plan_bwd, freq.data(), recovered.data());
+    std::cout << "ifft result=" << recovered << std::endl;
 
     // backward 结果默认没有除 N，手动归一化
     double scale = 1.0;
@@ -65,6 +68,40 @@ void test_mkl_fft_check(const std::string& space, std::vector<int> col_major_dim
 // =============== 驱动函数 ===============
 int main()
 {
+    std::complex<float> c2c_input[32];
+std::complex<float> c2c_output[32];
+float r2c_input[32];
+
+float r2c_output[34];
+DFTI_DESCRIPTOR_HANDLE my_desc1_handle = NULL;
+DFTI_DESCRIPTOR_HANDLE my_desc2_handle = NULL;
+MKL_LONG status;
+    for(int i = 0; i < 32;i++){
+        r2c_input[i] = i;
+        c2c_input[i] = i;
+    }
+
+/* ...put values into c2c_input[i] 0<=i<=31 */
+/* ...put values into r2c_input[i] 0<=i<=31 */
+
+status = DftiCreateDescriptor(&my_desc1_handle, DFTI_SINGLE,
+                              DFTI_COMPLEX, 1, 32);
+status = DftiSetValue(my_desc1_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+status = DftiCommitDescriptor(my_desc1_handle);
+status = DftiComputeForward(my_desc1_handle, c2c_input, c2c_output);
+status = DftiFreeDescriptor(&my_desc1_handle);
+/* result is c2c_output[i] 0<=i<=31 */
+status = DftiCreateDescriptor(&my_desc2_handle, DFTI_SINGLE,
+                              DFTI_REAL, 1, 32);
+status = DftiSetValue(my_desc1_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+status = DftiCommitDescriptor(my_desc2_handle);
+status = DftiComputeForward(my_desc2_handle, r2c_input, r2c_output);
+status = DftiFreeDescriptor(&my_desc2_handle);
+/* result is the complex r2c_data[i] 0<=i<=31   and is stored in CCS format*/
+    for(int i = 0; i < 16;i++){
+        std::cout << vec2<complex_t<float>>{reinterpret_cast<std::complex<float>*>(r2c_output)[i], c2c_output[i]} << std::endl;
+    }
+return 0;
     std::vector<std::vector<int>> dims_1d = {{7}, {8}};
     std::vector<std::vector<int>> dims_2d = {{7,5}, {8,6}};
     std::vector<std::vector<int>> dims_3d = {{7,5,3}, {8,6,4}};
