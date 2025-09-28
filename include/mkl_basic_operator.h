@@ -10,7 +10,7 @@
             fprintf( stderr,                                                \
                      "ERROR: MKL call \"%s\" in line %d of file %s failed " \
                      "with "                                                \
-                     "code (%d).\n",                                        \
+                     "code (%lld).\n",                                        \
                      #call,                                                 \
                      __LINE__,                                              \
                      __FILE__,                                              \

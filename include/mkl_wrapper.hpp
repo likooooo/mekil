@@ -8,21 +8,31 @@ enum class matrix_major
     row_major,
     col_major
 };
-#define CBLAS_REPEAT_CODE(T, func, ...) \
-    if      constexpr(is_s<T>){cblas_s##func(__VA_ARGS__);} \
-    else if constexpr(is_d<T>){cblas_d##func(__VA_ARGS__);} \
-    else if constexpr(is_c<T>){cblas_c##func(__VA_ARGS__);} \
-    else if constexpr(is_z<T>){cblas_z##func(__VA_ARGS__);} \
-    else{unreachable_constexpr_if();                   \
-}
-    
+#define __REPEAT_CODE(routing, T, func, ...) \
+    if      constexpr(is_s<T>){routing##s##func(__VA_ARGS__);} \
+    else if constexpr(is_d<T>){routing##d##func(__VA_ARGS__);} \
+    else if constexpr(is_c<T>){routing##c##func(__VA_ARGS__);} \
+    else if constexpr(is_z<T>){routing##z##func(__VA_ARGS__);} \
+    else     unreachable_constexpr_if();
+
+#define CBLAS_REPEAT_CODE(T, func, ...) __REPEAT_CODE(cblas_, T, func, __VA_ARGS__)
+#define MKL_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  mkl_, T, func, __VA_ARGS__)
+#define VEC_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  v, T, func, __VA_ARGS__)
+
+
+template<class T> struct mkl_mapping; 
+template<>struct mkl_mapping<float> {using type = float;};
+template<>struct mkl_mapping<double> {using type = double;};
+template<>struct mkl_mapping<std::complex<float>> {using type = MKL_Complex8;};
+template<>struct mkl_mapping<std::complex<double>> {using type = MKL_Complex16;};
+template<class T> using mkl_t = typename mkl_mapping<T>::type;
+
 template<class T> inline void copy_batch_strided(const MKL_INT N,
                                const T *X, const MKL_INT incX, const MKL_INT stridex,
                                T *Y, const MKL_INT incY, const MKL_INT stridey,
                                const MKL_INT batch_size)
 {
     CBLAS_REPEAT_CODE(T, copy_batch_strided, N, X, incX, stridex, Y, incY, stridey, batch_size);
-    
 }
 template <class T>
 inline void CenterCornerFlip(T *image, int widht, int height)
@@ -121,6 +131,61 @@ template<class TFrom, class TTo> inline void crop_to(TTo* output, vec2<size_t> o
         unreachable_constexpr_if();
     }
 }
+
+
+namespace mkl::vec
+{
+    template<class T> inline void add(int n, const T*a, const T*b, T* y)
+    {
+        VEC_REPEAT_CODE(T, Add, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
+    }
+    template<class T> inline void sub(int n, const T*a, const T*b, T* y)
+    {
+        VEC_REPEAT_CODE(T, Sub, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
+    }
+    template<class T> inline void mul(int n, const T*a, const T*b, T* y)
+    {
+        VEC_REPEAT_CODE(T, Mul, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
+    }
+    template<class T> inline void div(int n, const T*a, const T*b, T* y)
+    {
+        VEC_REPEAT_CODE(T, Div, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
+    }
+    template<class T> inline void add(int n, const T a, T* x)
+    {
+        //== TODO :SIMD
+        std::array<mkl_t<T>, (32 * sizeof(std::complex<double>) / sizeof(T))> buf; 
+        buf.fill(a);
+        int ibegin = 0;
+        while((ibegin + buf.size()) < n){
+            mkl::vec::add(buf.size(), buf.data(), x);
+            x += buf.size();
+            ibegin += buf.size();
+        }
+        mkl::vec::add(n - ibegin, buf.data(), x);
+    }
+    template<class T> inline void sub(int n, const T a, T* x)
+    {
+        //== TODO :SIMD
+        std::array<mkl_t<T>, (32 * sizeof(std::complex<double>) / sizeof(T))> buf; 
+        buf.fill(a);
+        int ibegin = 0;
+        while((ibegin + buf.size()) < n){
+            mkl::vec::sub(buf.size(), buf.data(), x);
+            x += buf.size();
+            ibegin += buf.size();
+        }
+        mkl::vec::sub(n - ibegin, buf.data(), x);
+    }
+    template<class T> inline void mul(int n, const T a, T* x, int inc = 1)
+    {
+        CBLAS_REPEAT_CODE(T, scal, n, a, x, inc);
+    }
+    template<class T> inline void div(int n, const T a, T* x, int inc = 1)
+    {
+        CBLAS_REPEAT_CODE(T, scal, n, (T(1)/a), x, inc);
+    }
+};
 
 template<class T> inline void VecDiv(int n, T*a, T*b, T* y)
 {
