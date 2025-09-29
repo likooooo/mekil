@@ -1,4 +1,6 @@
 file(GLOB list ${CMAKE_CURRENT_LIST_DIR}/*.cpp)
+# find_package(py_visualizer REQUIRED)
+#  py_visualizer::py_visualizer
 message(STATUS "add executable: ${list}")
 foreach(cpp IN LISTS list)
   get_filename_component(base_name ${cpp} NAME_WLE)

@@ -1,6 +1,7 @@
 #pragma once
 #include <mkl.h>
 #include <type_traist_notebook/type_traist.hpp>
+#include <assert.h>
 
 #ifndef MKL_CALL
 #   define MKL_CALL( call )                                                 \
@@ -8,14 +9,13 @@
         MKL_LONG status =( call );                                          \
         if (status!=DFTI_NO_ERROR&&!DftiErrorClass(status, DFTI_NO_ERROR))  \
             fprintf( stderr,                                                \
-                     "ERROR: MKL call \"%s\" in line %d of file %s failed " \
-                     "with "                                                \
-                     "code (%lld).\n%s\n",                                  \
+                     "ERROR: MKL call \"%s\" in file %s:%d failed "         \
+                     "\n* %s\n\n",                                          \
                      #call,                                                 \
-                     __LINE__,                                              \
                      __FILE__,                                              \
-                     status,                                                \
+                     __LINE__,                                              \
                      DftiErrorMessage(status) );                            \
+        assert(status == DFTI_NO_ERROR);                                    \
     }
 #endif  // CUFFT_CALL
 

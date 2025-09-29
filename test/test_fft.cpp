@@ -1,150 +1,130 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <mkl.h>
-#include <type_traist_notebook/type_traist.hpp>
+
 #include <mkl_fft.hpp>
+#include <assert.h>
 
-template<class T>void inplace_test()
-{
-    constexpr size_t N = 32;
-    vec<real_t<T>, N + 2> r2c_data;
-    vec<complex_t<T>, N> c2c_data; 
-    for(size_t i = 0; i < N; i++){
-        c2c_data.at(i) = r2c_data.at(i) = 2 * cos(2 * M_PI * 2 * i / N) + 10 * cos(2 * M_PI * 3 * i / N);
-    }
-
-    DFTI_DESCRIPTOR_HANDLE my_desc1_handle = NULL;
-    DFTI_DESCRIPTOR_HANDLE my_desc2_handle = NULL;
-    MKL_LONG status;
-
-    /* ...put values into c2c_data[i] 0<=i<=31 */
-    /* ...put values into r2c_data[i] 0<=i<=31 */
-
-    status = DftiCreateDescriptor(&my_desc1_handle, mekil::mklFFT<T>::dft_precision,
-                                DFTI_COMPLEX, 1, N);
-    status = DftiCommitDescriptor(my_desc1_handle);
-    status = DftiComputeForward(my_desc1_handle, c2c_data.data());
-    status = DftiFreeDescriptor(&my_desc1_handle);
-    /* result is c2c_data[i] 0<=i<=31 */
-    status = DftiCreateDescriptor(&my_desc2_handle, mekil::mklFFT<T>::dft_precision,
-                                DFTI_REAL, 1, N);
-    status = DftiCommitDescriptor(my_desc2_handle);
-    status = DftiComputeForward(my_desc2_handle, r2c_data.data());
-    status = DftiFreeDescriptor(&my_desc2_handle);
-    // std::cout << c2c_data << std::endl;
-    // std::cout << reinterpret_cast<vec<complex_t<T>, N / 2 +1>&>(r2c_data) << std::endl;
-    std::cout << (reinterpret_cast<vec<complex_t<T>, N / 2 +1>&>(r2c_data) - reinterpret_cast<vec<complex_t<T>, N/2 + 1>&>(c2c_data))<< std::endl;
+template<class T> inline std::pair<int ,int> cal_layout(const std::vector<int>&  col_major_dim){
+    auto prod = std::accumulate(col_major_dim.begin() + 1, col_major_dim.end(), (size_t)1, [](auto a, auto b) {return a * b; });
+    auto change_fastest_axis = (std::is_floating_point_v<T> ? (col_major_dim.front() / 2 + 1) * 2 : col_major_dim.front());
+    return {change_fastest_axis, prod};
 }
 
 template<class T>
-void outplace_test()
+void test_mkl_fft_ifft_out_of_place(const std::string& space, std::vector<int> col_major_dims)
 {
-    constexpr size_t N = 32;
-    vec<real_t<T>, N + 2> r2c_input{0};
-    vec<complex_t<T>, N> c2c_input; 
-    for(size_t i = 0; i < N; i++){
-        c2c_input.at(i) = r2c_input.at(i) = 2 * cos(2 * M_PI * 2 * i / N) + 10 * cos(2 * M_PI * 3 * i / N);
+    printf("*%s test mklFFT_out_of_place<%s>", space.c_str(), TypeReflection<T>().c_str());
+    std::cout << col_major_dims << std::endl;
+    using namespace mekil;
+    using fft_t = mklFFT<T>;
+    using spatial_type = T;
+    using fourier_type = complex_t<T>;
+
+    int prod = 1;for(int n:col_major_dims) prod *= n;
+    std::vector<spatial_type> image(prod);
+    for(int i = 0; i < prod;i++) image.at(i) = real_t<T>(i)/prod;
+
+    auto plan_fwd = fft_t::make_plan({col_major_dims.begin(), col_major_dims.end()});
+    std::vector<fourier_type> freq(prod);
+    fft_t::exec_forward(*plan_fwd, image.data(), freq.data());
+    std::vector<spatial_type> recovered(prod);
+    fft_t::exec_backward(*plan_fwd, freq.data(), recovered.data());
+
+    for(size_t i=0;i<prod;++i){
+        if(std::abs((recovered.at(i) - image.at(i))) > (is_s<real_t<T>> ? 1e-6 : 1e-15)){
+            throw std::runtime_error("FFT->IFFT mismatch! " + std::to_string(std::abs(recovered.at(i) - image.at(i))));
+        }
     }
-    vec<real_t<T>, N + 2> r2c_output;
-    vec<complex_t<T>, N> c2c_output; 
+    printf("*%s    test success\n", space.c_str());
+}
 
-    DFTI_DESCRIPTOR_HANDLE my_desc1_handle = NULL;
-    DFTI_DESCRIPTOR_HANDLE my_desc2_handle = NULL;
-    MKL_LONG status;
+template<class T>
+void test_mkl_fft_ifft_inplace(const std::string& space, std::vector<int> col_major_dims)
+{
+    printf("*%s test mklFFT_inplace<%s>", space.c_str(), TypeReflection<T>().c_str());
+    std::cout << col_major_dims << std::endl;
+    using namespace mekil;
+    using fft_t = mklFFT<T>;
+    using spatial_type = T;
+    using fourier_type = complex_t<T>;
 
+    auto [xstride, y] = cal_layout<spatial_type>(col_major_dims);
+    int N = 1; for(int n:col_major_dims) N *= n;
+    std::vector<spatial_type> image(xstride * y);
+    for(int iy = 0; iy < y; iy++){
+        int ix = 0;
+        for(; ix < col_major_dims.front(); ix++){
+            image.at(iy * xstride + ix) = real_t<T>((ix+1) * (iy+1)) / real_t<T>(N*N);
+        }
+        //== PADDING
+        for(;ix < xstride; ix++){
+            image.at(iy * xstride + ix) = NAN;
+        }
+    }
 
-    status = DftiCreateDescriptor(&my_desc1_handle, mekil::mklFFT<T>::dft_precision,
-                                DFTI_COMPLEX, 1, 32);
-    status = DftiSetValue(my_desc1_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
-    status = DftiCommitDescriptor(my_desc1_handle);
-    status = DftiCreateDescriptor(&my_desc2_handle, mekil::mklFFT<T>::dft_precision,
-                                DFTI_REAL, 1, 32);
-    status = DftiSetValue(my_desc2_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
-    status = DftiCommitDescriptor(my_desc2_handle);
+    auto plan_fwd = fft_t::make_plan({col_major_dims.begin(), col_major_dims.end()}, true);
+    std::vector<spatial_type> freq = image;
+    fft_t::exec_forward(*plan_fwd, freq.data());
+    std::vector<spatial_type> recovered = freq;
+    fft_t::exec_backward(*plan_fwd, recovered.data());
 
-    status = DftiComputeForward(my_desc1_handle, c2c_input.data(), c2c_output.data());
-    status = DftiFreeDescriptor(&my_desc1_handle);
-    /* result is c2c_output[i] 0<=i<=31 */
-    status = DftiComputeForward(my_desc2_handle, r2c_input.data(), r2c_output.data());
-    status = DftiFreeDescriptor(&my_desc2_handle);
+    for(int iy = 0; iy < y; iy++){
+        int ix = 0;
+        for(; ix < col_major_dims.front(); ix++){
+            int i = ix + iy * xstride;
+            if(std::abs(recovered.at(i) - image.at(i)) > 1e-6){
+                throw std::runtime_error("FFT->IFFT mismatch! " + std::to_string(std::abs(recovered.at(i) - image.at(i))));
+            }
+        }
+    }
+    if(is_real_v<T>){
+        recovered.resize(xstride);
+        std::cout <<"*"<< space <<  "    final=" << recovered << std::endl;
+    }
+    printf("*%s    test success\n\n", space.c_str());
+}
 
-    auto error = (reinterpret_cast<vec<complex_t<T>, N / 2 +1>&>(r2c_output) - reinterpret_cast<vec<complex_t<T>, N/2 + 1>&>(c2c_output));
-    std::cout << error << std::endl;
+template<class T>
+void test_mkl_fft_ifft(const std::string& space, std::vector<int> col_major_dims)
+{
+    test_mkl_fft_ifft_out_of_place<T>(space, col_major_dims);
+    if(col_major_dims.size() > 1 && is_real_v<T>){
+        printf("*%s test mklFFT_inplace<%s>", space.c_str(), TypeReflection<T>().c_str());
+        std::cout << col_major_dims << std::endl;
+        printf("*%s    test failed. (NOT SUPPORT)\n\n",space.c_str());
+    }
+    else{
+        test_mkl_fft_ifft_inplace<T>(space, col_major_dims);
+    }
 }
 int main()
 {
-    
-    inplace_test<float>();
-    outplace_test<float>();
-    /* result is the complex value r2c_data[i] 0<=i<=31 */
-    /* and is stored in CCS format*/
+    std::vector<std::vector<int>> dims_1d = {{7}, {8}};
+    std::vector<std::vector<int>> dims_2d = {{7,5}, {8,6}};
+    std::vector<std::vector<int>> dims_3d = {{7,5,3}, {8,6,4}};
+
+    // return 0;
+    for(auto d : dims_2d){
+        test_mkl_fft_ifft<std::complex<float>>("2D", d);
+        test_mkl_fft_ifft<std::complex<double>>("2D", d);
+    }
+
+    for(auto d : dims_3d){
+        test_mkl_fft_ifft<std::complex<float>>("3D", d);
+        test_mkl_fft_ifft<std::complex<double>>("3D", d);
+    }
+    for(auto d : dims_1d){
+        test_mkl_fft_ifft<std::complex<float>>("1D", d);
+        test_mkl_fft_ifft<std::complex<double>>("1D", d);
+    }
+    for(auto d : dims_1d){
+        test_mkl_fft_ifft<float>("1D", d);
+        test_mkl_fft_ifft<double>("1D", d);
+    }
+    for(auto d : dims_2d){
+        test_mkl_fft_ifft<float>("2D", d);
+        test_mkl_fft_ifft<double>("2D", d);
+    }
+    for(auto d : dims_3d){
+        test_mkl_fft_ifft<float>("3D", d);
+        test_mkl_fft_ifft<double>("3D", d);
+    }
 }
-
-// int main() {
-//     // 设置FFT参数
-//     const int N = 16;           // 实数输入数据点数
-//     const int N_out = N/2 + 1;  // 复数输出数据点数 (对称性)
-
-//     // 分配内存
-//     float *in = (float*)mkl_malloc(N * sizeof(float), 64);      // 实数输入
-//     MKL_Complex8 *out = (MKL_Complex8*)mkl_malloc(N_out * sizeof(MKL_Complex8), 64); // 复数输出
-
-//     // 初始化输入数据 (示例: 正弦波)
-//     for (int i = 0; i < N; i++) {
-//         in[i] = cos(2 * M_PI * 2 * i / N) + 10 * cos(2 * M_PI * 3 * i / N);
-//     }
-
-//     // 创建FFT描述符
-//     DFTI_DESCRIPTOR_HANDLE handle;
-//     MKL_LONG status;
-
-//     // 创建实数到复数FFT描述符
-//     status = DftiCreateDescriptor(&handle, DFTI_SINGLE, DFTI_REAL, 1, N);
-//     if (status != DFTI_NO_ERROR) {
-//         printf("Error creating descriptor\n");
-//         return 1;
-//     }
-
-//     // 设置输出为紧凑格式 (只存储非冗余部分)
-//     status = DftiSetValue(handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX);
-//     if (status != DFTI_NO_ERROR) {
-//         printf("Error setting output format\n");
-//         return 1;
-//     }
-
-//     // 提交描述符
-//     status = DftiCommitDescriptor(handle);
-//     if (status != DFTI_NO_ERROR) {
-//         printf("Error committing descriptor\n");
-//         return 1;
-//     }
-
-//     printf("Input (real):\n");
-//     for (int i = 0; i < N; i++) {
-//         printf("%.3f ", in[i]);
-//     }
-//     // 执行FFT (实数到复数)
-//     status = DftiComputeForward(handle, in, out);
-//     if (status != DFTI_NO_ERROR) {
-//         printf("Error computing FFT\n");
-//         return 1;
-//     }
-
-//     // 打印结果
-//     printf("Input (real):\n");
-//     for (int i = 0; i < N; i++) {
-//         printf("%.3f ", in[i]);
-//     }
-//     printf("\n\nFFT output (complex):\n");
-//     for (int i = 0; i < N_out; i++) {
-//         printf("Bin %2d: %7.3f + %7.3fj\n", i, out[i].real, out[i].imag);
-//     }
-
-//     // 清理
-//     DftiFreeDescriptor(&handle);
-//     mkl_free(in);
-//     mkl_free(out);
-
-//     return 0;
-// }

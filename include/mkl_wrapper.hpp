@@ -133,6 +133,103 @@ template<class TFrom, class TTo> inline void crop_to(TTo* output, vec2<size_t> o
 }
 
 
+
+
+template<class T, bool is_c_stly_memory_layout = false>
+inline void transpose(const T* input, T* output, const std::array<int,2>& shape)
+{
+    const int rows = shape[0];
+    const int cols = shape[1];
+    MKL_REPEAT_CODE(T, omatcopy,
+        is_c_stly_memory_layout ? 'R' : 'C', // memory layout
+        'T',                                 // transpose
+        rows, cols,
+        mkl_t<T>{1.0},                       // alpha
+        (const mkl_t<T>*)input, is_c_stly_memory_layout ? cols : rows,
+        (mkl_t<T>*)output, is_c_stly_memory_layout ? rows : cols
+    );
+}
+template<class TFrom, class TTo, class Callback, bool is_c_stly_memory_layout = false>
+inline void permuteND(const TFrom* input, TTo* output,
+               const std::vector<int>& shape,
+               const std::vector<int>& perm,
+               Callback convert_callback)
+{
+    int ndim = static_cast<int>(shape.size());
+
+    // 计算输入 stride
+    std::vector<int> in_stride(ndim);
+    if constexpr (is_c_stly_memory_layout) {
+        // C-style: last dim stride=1
+        in_stride[ndim - 1] = 1;
+        for (int i = ndim - 2; i >= 0; --i) {
+            in_stride[i] = in_stride[i + 1] * shape[i + 1];
+        }
+    } else {
+        // Fortran-style: first dim stride=1
+        in_stride[0] = 1;
+        for (int i = 1; i < ndim; ++i) {
+            in_stride[i] = in_stride[i - 1] * shape[i - 1];
+        }
+    }
+
+    // 输出 shape
+    std::vector<int> out_shape(ndim);
+    for (int i = 0; i < ndim; ++i)
+        out_shape[i] = shape[perm[i]];
+
+    // 输出 stride (和输入相同方式)
+    std::vector<int> out_stride(ndim);
+    if constexpr (is_c_stly_memory_layout) {
+        out_stride[ndim - 1] = 1;
+        for (int i = ndim - 2; i >= 0; --i) {
+            out_stride[i] = out_stride[i + 1] * out_shape[i + 1];
+        }
+    } else {
+        out_stride[0] = 1;
+        for (int i = 1; i < ndim; ++i) {
+            out_stride[i] = out_stride[i - 1] * out_shape[i - 1];
+        }
+    }
+
+    // 总元素数
+    int total = 1;
+    for (int d : shape) total *= d;
+
+    // 遍历输出 index
+    for (int out_index = 0; out_index < total; ++out_index) {
+        // 解码 output 坐标
+        std::vector<int> out_coord(ndim);
+        int idx = out_index;
+        if constexpr (is_c_stly_memory_layout) {
+            for (int i = 0; i < ndim; ++i) {
+                out_coord[i] = idx / out_stride[i];
+                idx %= out_stride[i];
+            }
+        } else {
+            for (int i = ndim - 1; i >= 0; --i) {
+                out_coord[i] = idx / out_stride[i];
+                idx %= out_stride[i];
+            }
+        }
+
+        // 反 perm 得到输入坐标
+        std::vector<int> in_coord(ndim);
+        for (int i = 0; i < ndim; ++i)
+            in_coord[perm[i]] = out_coord[i];
+
+        // 输入 index
+        int in_index = 0;
+        for (int i = 0; i < ndim; ++i)
+            in_index += in_coord[i] * in_stride[i];
+
+        // 写入输出
+        output[out_index] = convert_callback(input[in_index]);
+    }
+}
+
+
+
 namespace mkl::vec
 {
     template<class T> inline void add(int n, const T*a, const T*b, T* y)
@@ -244,28 +341,3 @@ template<class T> inline void VecScala(int n, const T a, T* x, int inc = 1)
         cblas_zscal(n, (MKL_Complex16*)&a, (MKL_Complex16*)x, inc);
     }
 }
-
-#ifdef UNFINISHED_CODE
-char major = 'r';
-template <class T>
-void transpose(T *p, int sizey, int sizex)
-{
-    if constexpr (std::is_same_v<float, std::remove_cv_t<T>>)
-    {
-        // mkl_simatcopy(major, 'T', sizex, sizey, T(1), p, sizey, sizex);
-        mkl_simatcopy(major, 'T', sizey, sizex, T(1), p, sizex, sizey);
-    }
-    else if constexpr (std::is_same_v<double, std::remove_cv_t<T>>)
-    {
-        mkl_dimatcopy(major, 'T', sizey, sizex, T(1), p, sizex, sizey);
-    }
-    else if constexpr (std::is_same_v<std::complex<float>, std::remove_cv_t<T>>)
-    {
-        mkl_cimatcopy(major, 'T', sizey, sizex, MKL_Complex8(1), (MKL_Complex8 *)p, sizex, sizey);
-    }
-    else if constexpr (std::is_same_v<std::complex<double>, std::remove_cv_t<T>>)
-    {
-        mkl_zimatcopy(major, 'T', sizey, sizex, MKL_Complex16(1), (MKL_Complex16 *)p, sizex, sizey);
-    }
-}
-#endif
