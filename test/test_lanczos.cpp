@@ -7,14 +7,6 @@
 #include <mkl_basic_operator.h>
 
 // Helper function to print a matrix for easy debugging
-void print_matrix(const std::vector<double>& matrix, int rows, int cols) {
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            std::cout << matrix[i * cols + j] << "\t";
-        }
-        std::cout << "\n";
-    }
-}
 
 // Helper function for matrix-vector multiplication
 std::vector<double> mat_vec_mult(const std::vector<double>& A, int rows, int cols,

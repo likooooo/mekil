@@ -204,4 +204,25 @@ namespace mekil
             return make_row_major_plan(col_major_dims, inplace, normalize_factor, batch_size);
         }
     };
+    //== inplace fft should be padded to the end of fastedst-axis
+    // case1 : even-size for fastedst-axis
+    // logic shape : (               4, 2)
+    // actual-shape: (floor(4/2 + 1)*2, 2)
+    // [0,1,2,3, pad, pad]
+    // [4,5,6,7, pad, pad]
+    //
+    // case2: odd-size for fastedst-axis
+    // logic shape : (               3, 2)
+    // actual-shape: (floor(3/2 + 1)*2, 2)
+    // [0,1,2, pad]
+    // [3,4,5, pad]
+    //
+    template<class T> inline std::pair<int ,int> cal_fft_memory_layout(std::vector<int> col_major_dim, bool is_col_major = true)
+    {
+        if(!is_col_major) std::reverse(col_major_dim.begin(), col_major_dim.end());
+        auto prod = std::accumulate(col_major_dim.begin() + 1, col_major_dim.end(), (size_t)1, [](auto a, auto b) {return a * b; });
+        auto change_fastest_axis_with_padding = (std::is_floating_point_v<T> ? (col_major_dim.front() / 2 + 1) * 2 : col_major_dim.front());
+        return {change_fastest_axis_with_padding, prod};
+    }
+
 }

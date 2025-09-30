@@ -1,12 +1,4 @@
-
 #include <mkl_fft.hpp>
-#include <assert.h>
-
-template<class T> inline std::pair<int ,int> cal_layout(const std::vector<int>&  col_major_dim){
-    auto prod = std::accumulate(col_major_dim.begin() + 1, col_major_dim.end(), (size_t)1, [](auto a, auto b) {return a * b; });
-    auto change_fastest_axis = (std::is_floating_point_v<T> ? (col_major_dim.front() / 2 + 1) * 2 : col_major_dim.front());
-    return {change_fastest_axis, prod};
-}
 
 template<class T>
 void test_mkl_fft_ifft_out_of_place(const std::string& space, std::vector<int> col_major_dims)
@@ -46,7 +38,7 @@ void test_mkl_fft_ifft_inplace(const std::string& space, std::vector<int> col_ma
     using spatial_type = T;
     using fourier_type = complex_t<T>;
 
-    auto [xstride, y] = cal_layout<spatial_type>(col_major_dims);
+    auto [xstride, y] = cal_fft_memory_layout<spatial_type>(col_major_dims);
     int N = 1; for(int n:col_major_dims) N *= n;
     std::vector<spatial_type> image(xstride * y);
     for(int iy = 0; iy < y; iy++){
