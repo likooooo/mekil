@@ -2,9 +2,9 @@
 
 std::vector<int> random_shape()
 {
-    uniform_random<int> random_dim(2, 2);
-    // uniform_random<int> random_size(1, 128);
-    uniform_random<int> random_size(2, 5);
+    uniform_random<int> random_dim(1, 4);
+    uniform_random<int> random_size(1, 128);
+    // uniform_random<int> random_size(2, 5);
 
     std::vector<int> shape(random_dim());
     for(auto& n : shape) n = random_size(); 
@@ -12,20 +12,20 @@ std::vector<int> random_shape()
 }
 template<class T> std::vector<T> test_pattern(const std::vector<int>& shape)
 {
-    int N = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
+    size_t N = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
     uniform_random<int> random(-5, 5);
     std::vector<T> pattern(N, 0);
     auto [xstride, ysize] = mekil::cal_fft_memory_layout<T>(shape);
     xstride = shape.front();
-    int a = std::floor(0.25 * xstride);
-    int b = std::floor(0.75 * xstride);
-    int size = (1 < shape.size()? shape.at(1): 1); 
-    int a1 = int(std::floor(0.25 * size));
-    int b1 = int(std::ceil(0.75 * size));  
-    for(int y = 0; y < ysize; y++){
-        int i = y % size;
+    size_t a = std::floor(0.25 * xstride);
+    size_t b = std::floor(0.75 * xstride);
+    size_t size = (1 < shape.size()? shape.at(1): 1); 
+    size_t a1 = size_t(std::floor(0.25 * size));
+    size_t b1 = size_t(std::ceil(0.75 * size));  
+    for(size_t y = 0; y < ysize; y++){
+        size_t i = y % size;
         if(a1 < i && i < b1) continue;
-        for(int x = 0; x < shape.front(); x++){
+        for(size_t x = 0; x < shape.front(); x++){
             if(x <= a || x >=b){
                 auto& n = pattern.at(x + y*shape.front());
                 if constexpr(is_complex_v<T>) n = T(random(), random());
@@ -113,20 +113,18 @@ template<class scalar> int fft_operator_out_of_place_test()
         to_string(shape).c_str()
     );
     std::vector<scalar> origin = test_pattern<scalar>(shape);
-    shape ={5,5};
-    origin = {
-    3,5,0,0,-1,
-    -3,5,0,-2,-4,
-    0,0,0,0,0,
-    0,0,0,0,0,
-    -3,1,0,-5,-5,
-    };
+    // shape ={5,5};
+    // origin = {
+    //     3,5,0,0,-1,
+    //     -3,5,0,-2,-4,
+    //     0,0,0,0,0,
+    //     0,0,0,0,0,
+    //     -3,1,0,-5,-5,
+    // };
     std::vector<scalar> input = origin; 
     auto [xstride, ysize] = mekil::cal_fft_memory_layout<scalar>(shape);
-    // mekil::tr
-    transpose<scalar>(origin.data(), input.data(), {shape.at(0), shape.at(1)}); 
-    print_matrix(input, ysize, input.size()/ysize);
-    printf("====\n");
+    // print_matrix(input, ysize, input.size()/ysize);
+    // printf("====\n");
     auto row_major_dim = shape;
     std::reverse(row_major_dim.begin(), row_major_dim.end());
     using fft = mekil::fftw<scalar, scalarTo>;
@@ -134,20 +132,19 @@ template<class scalar> int fft_operator_out_of_place_test()
 
     void* pIn, *pOut;
     pIn = input.data();
-    // std::vector<scalarTo> output(is_real_v<scalar> ? size_t(xstride/2 * ysize) : origin.size());
-    std::vector<scalarTo> output(origin.size());
+    std::vector<scalarTo> output(is_real_v<scalar> ? size_t(xstride/2 * ysize) : origin.size());
     pOut = output.data();
     auto check_fft_result = [&](){return true;};
     {
         trace_print<void>_("    fft ", "", 0);
-        fft::transform(fft::make_plan(row_major_dim, FFTW_FORWARD).get(), pIn, pOut);
+        fft::transform(fft::make_plan(row_major_dim, FFTW_FORWARD, pIn, pOut).get());
     }
-    print_matrix(output, ysize, output.size()/ysize);
-    printf("====\n");
+    // print_matrix(output, ysize, output.size()/ysize);
+    // printf("====\n");
     assert(check_fft_result());
     {
         trace_print<void>_("    ifft", "", 0);
-        ifft::transform(ifft::make_plan(row_major_dim, FFTW_BACKWARD).get(), pOut, pIn);
+        ifft::transform(ifft::make_plan(row_major_dim, FFTW_BACKWARD, pOut, pIn).get());
     }
      
     input /= scalar(origin.size());
@@ -157,8 +154,7 @@ template<class scalar> int fft_operator_out_of_place_test()
         return std::abs(a) < std::abs(b);
     }));
     max_error /= origin.size();
-    // if(max_error > 1e-6)
-    {
+    if(max_error > 1e-6){
         print_matrix(origin, ysize, origin.size()/ysize);
         printf("===== recorved =====\n");
         print_matrix(input, ysize, input.size()/ysize);
@@ -180,40 +176,25 @@ template<class scalar> int fft_operator_out_of_place_test()
 auto run_test()
 {
     return std::array{
-        // fft_operator_inplace_test<float>(),
-        // fft_operator_inplace_test<std::complex<float>>(),
-        // fft_operator_inplace_test<double>(),
-        // fft_operator_inplace_test<std::complex<double>>(),
+        fft_operator_inplace_test<float>(),
+        fft_operator_inplace_test<std::complex<float>>(),
+        fft_operator_inplace_test<double>(),
+        fft_operator_inplace_test<std::complex<double>>(),
 
         fft_operator_out_of_place_test<float>(),
-        // fft_operator_out_of_place_test<std::complex<float>>(),
+        fft_operator_out_of_place_test<std::complex<float>>(),
         fft_operator_out_of_place_test<double>(),
-        // fft_operator_out_of_place_test<std::complex<double>>(),
-
+        fft_operator_out_of_place_test<std::complex<double>>(),
         0
     };
 }
 
 int main()
 {
-    run_test();
-    run_test();
-    run_test();
-    // int repeat_count = 100;
-    // for(int i = 0; i < repeat_count; i++)
-    // {
-    //    auto n = {
-    //         fft_operator_inplace_test<float, std::complex<float>>(),
-    //         fft_operator_inplace_test<std::complex<float>>(),
-    //         fft_operator_inplace_test<double, std::complex<double>>(),
-    //         fft_operator_inplace_test<std::complex<double>>(),
-
-    //         fft_operator_outplace_test<float, std::complex<float>>(),
-    //         fft_operator_outplace_test<std::complex<float>>(),
-    //         fft_operator_outplace_test<double, std::complex<double>>(),
-    //         fft_operator_outplace_test<std::complex<double>>()
-    //     };
-    // }
-    // mkl_test();
-    // std::cout <<"\n---------------------------\n   test end\n";
+    mekil::print_fftw_version();
+    int repeat_count = 2;
+    for(int i = 0; i < repeat_count; i++){
+       run_test();
+    }
+    std::cout <<"\n---------------------------\n   test end\n";
 }

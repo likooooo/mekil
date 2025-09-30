@@ -56,9 +56,10 @@ namespace mekil
         static plan_ptr_type plan_c2r(const std::vector<int>& dim, 
             void* pFrom = nullptr, void* pTo = nullptr)
         {
+            plan_ptr_type p = nullptr;
             const int rank = dim.size();
             if constexpr(is_s<rT>){
-                return fftwf_plan_dft_c2r(
+                p = fftwf_plan_dft_c2r(
                     rank, dim.data(),
                     reinterpret_cast<fftw_t<cT>*>(pFrom),
                     reinterpret_cast<fftw_t<rT>*>(pTo), 
@@ -66,23 +67,26 @@ namespace mekil
                 );
             }
             else if constexpr(is_d<rT>){
-                return fftw_plan_dft_c2r(
+                p = fftw_plan_dft_c2r(
                     rank, dim.data(),
                     reinterpret_cast<fftw_t<cT>*>(pFrom),
                     reinterpret_cast<fftw_t<rT>*>(pTo), 
-                    flag
+                    flag 
                 );
             }
             else{
                 unreachable_constexpr_if();
             }
+            assert(nullptr != p);
+            return p;
         }
         static plan_ptr_type plan_r2c(const std::vector<int>& dim, 
             void* pFrom = nullptr, void* pTo = nullptr)
         {
+            plan_ptr_type p = nullptr;
             const int rank = dim.size();
             if constexpr(is_s<rT>){
-                return fftwf_plan_dft_r2c(
+                p = fftwf_plan_dft_r2c(
                     rank, dim.data(), 
                     reinterpret_cast<fftw_t<rT>*>(pFrom),
                     reinterpret_cast<fftw_t<cT>*>(pTo), 
@@ -90,7 +94,7 @@ namespace mekil
                 );
             }
             else if constexpr(is_d<rT>){
-                return fftw_plan_dft_r2c(
+                p = fftw_plan_dft_r2c(
                     rank, dim.data(),
                     reinterpret_cast<fftw_t<rT>*>(pFrom),
                     reinterpret_cast<fftw_t<cT>*>(pTo), 
@@ -100,11 +104,14 @@ namespace mekil
             else{
                 unreachable_constexpr_if();
             }
+            assert(nullptr != p);
+            return p;
         }
+        //== 虽然手册说 make plan 支持 nullptr, 但是我测试发现还是有问题.
         static plan_holder make_plan(const std::vector<int>& dim, 
             int direction = FFTW_FORWARD, void* pFrom = nullptr, void* pTo = nullptr)
         {
-            static_assert(!(is_real_v<T> && is_real_v<TTo>), "fft real to real is invalid.");
+            static_assert(!(is_real_v<T> && is_real_v<TTo>), "unsupport fft real to real.");
             plan_holder p;
             if constexpr(is_real_v<T>){
                 assert(direction == FFTW_FORWARD);
@@ -124,23 +131,28 @@ namespace mekil
         static void transform(plan_ptr_type pPlan, void* pFrom = nullptr, void* pTo = nullptr)
         {
             if(nullptr == pFrom && nullptr == pTo){
-                trace_print<void>_("    auto ", "", 0);
                 FFTW_REPEAT_CODE(rT, execute, pPlan);
             }
             else{
                 assert(nullptr != pFrom);
                 if(pTo == nullptr) pTo = (void*)pFrom;
                 if constexpr(is_real_v<T> && is_complex_v<TTo>){
-                    trace_print<void>_("    r2c ", "", 0);
-                    FFTW_REPEAT_CODE(rT, execute_dft_r2c, pPlan, (fftw_t<T>*)pFrom, (fftw_t<TTo>*)pTo);
+                    FFTW_REPEAT_CODE(rT, execute_dft_r2c, pPlan, 
+                        reinterpret_cast<fftw_t<rT>*>(pFrom),
+                        reinterpret_cast<fftw_t<cT>*>(pTo)
+                    );
                 }
                 else if constexpr(is_real_v<TTo> && is_complex_v<T>){
-                    trace_print<void>_("    c2r ", "", 0);
-                    FFTW_REPEAT_CODE(rT, execute_dft_c2r, pPlan, (fftw_t<T>*)pFrom, (fftw_t<TTo>*)pTo);
+                    FFTW_REPEAT_CODE(rT, execute_dft_c2r, pPlan,
+                        reinterpret_cast<fftw_t<cT>*>(pFrom),
+                        reinterpret_cast<fftw_t<rT>*>(pTo)
+                    );
                 }
                 else if constexpr(is_complex_v<T> && is_complex_v<TTo>){
-                    trace_print<void>_("    c2c ", "", 0);
-                    FFTW_REPEAT_CODE(rT, execute_dft, pPlan, (fftw_t<T>*)pFrom, (fftw_t<TTo>*)pTo);
+                    FFTW_REPEAT_CODE(rT, execute_dft, pPlan, 
+                        reinterpret_cast<fftw_t<cT>*>(pFrom),
+                        reinterpret_cast<fftw_t<cT>*>(pTo)
+                    );
                 }
                 else 
                     unreachable_constexpr_if();
@@ -159,4 +171,13 @@ namespace mekil
             return std::unique_ptr<char, deleter>(s, deleter());
         }
     };
+    inline void print_fftw_version()
+    {
+#ifdef FFTWF_VERSION_STR
+        printf("FFTWF version is " FFTWF_VERSION_STR "\n");
+#endif
+#ifdef FFTW_VERSION_STR
+        printf("FFTW  version is " FFTW_VERSION_STR "\n");
+#endif
+    }
 };
