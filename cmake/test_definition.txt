@@ -1,2 +1,2 @@
-${CMAKE_BINARY_DIR}/test_CenterCornerFlip
-golden;
+cd ${CMAKE_BINARY_DIR} && for name in $(ls ./*test_*); do ./$name; done
+test;

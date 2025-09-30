@@ -2,9 +2,13 @@
 #include "mkl_basic_operator.h"
 #include "mkl_wrapper.hpp"
 #include <assert.h>
+#if defined(HAVE_FFTW) || defined(HAVE_FFTWF)
+#   include "fftw_fft.hpp"
+#endif
 //== 
 // TODO : 对于 mkl::fft 不支持超过 1d inplace real->complex.
-// 实际上我也并没有找到相关的资料, 我目前的猜测是 mkl 不支持
+// 实际上我也并没有找到相关的资料, 我目前的猜测是 mkl 不支持, 目前的解决方案是通过引入 fftw 实现.
+// mkl 相比于 fftw 后者更灵活, 在没有解决 TODO 的情况下, 我建议直接用 fftw
 // 
 
 namespace mekil
@@ -200,5 +204,4 @@ namespace mekil
             return make_row_major_plan(col_major_dims, inplace, normalize_factor, batch_size);
         }
     };
-   
 }

@@ -1,11 +1,10 @@
 file(GLOB list ${CMAKE_CURRENT_LIST_DIR}/*.cpp)
 # find_package(py_visualizer REQUIRED)
 #  py_visualizer::py_visualizer
-message(STATUS "add executable: ${list}")
 foreach(cpp IN LISTS list)
+  message(STATUS "add executable: ${cpp}")
   get_filename_component(base_name ${cpp} NAME_WLE)
-  message(${base_name})
   add_executable(${base_name} ${cpp})
-  target_link_libraries(${base_name} PUBLIC MKL::MKL)
+  target_link_libraries(${base_name} PUBLIC mekil)
   set_target_properties(${base_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}) 
 endforeach()
