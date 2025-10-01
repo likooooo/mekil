@@ -1,6 +1,6 @@
 #pragma once
 #include "mkl_basic_operator.h"
-#include "mkl_wrapper.hpp"
+#include "mkl_reshape.hpp"
 #include <assert.h>
 #if defined(HAVE_FFTW) || defined(HAVE_FFTWF)
 #   include "fftw_fft.hpp"

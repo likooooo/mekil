@@ -1,4 +1,4 @@
-#include <mkl_wrapper.hpp>
+#include <mkl_reshape.hpp>
 
 // 检查函数：如果不一致，直接抛异常
 template <class T>

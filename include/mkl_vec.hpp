@@ -41,9 +41,13 @@ namespace mkl::vec
     {
         add(n, -a, x);
     }
-    template<class T> inline void mul(int n, const T a, T* x, int inc = 1)
+    template<class T> inline void mul(int n, const T a, T* x, std::enable_if_t<is_real_v<T>, int> inc = 1)
     {
         CBLAS_REPEAT_CODE(T, scal, n, a, x, inc);
+    }
+    template<class T> inline void mul(int n, const T a, T* x, std::enable_if_t<is_complex_v<T>, int> inc = 1)
+    {
+        CBLAS_REPEAT_CODE(T, scal, n, &a, x, inc);
     }
     template<class T> inline void div(int n, const T a, T* x, int inc = 1)
     {

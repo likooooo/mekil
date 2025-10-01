@@ -1,5 +1,5 @@
 #include <type_traist_notebook/type_traist.hpp>
-#include <mkl_wrapper.hpp>
+#include <mkl_reshape.hpp>
 #include <assert.h>
 
 template<class T>

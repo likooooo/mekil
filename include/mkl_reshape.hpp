@@ -1,7 +1,5 @@
 #pragma once
-#include <type_traist_notebook/type_traist.hpp>
 #include "mkl_basic_operator.h"
-#include <mkl.h>
 
 
 template<class T> inline void copy_batch_strided(const MKL_INT N,

@@ -1,4 +1,4 @@
-#include <mkl_wrapper.hpp>
+#include <mkl_reshape.hpp>
 #include <mkl_vec.hpp>
 #include <functional>
 #include <stdexcept>
