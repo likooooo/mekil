@@ -3,7 +3,6 @@
 #include <cmath>
 #include <numeric>
 #include <random>
-#include <cpu_backend.hpp>
 #include <mkl_basic_operator.h>
 
 // Helper function to print a matrix for easy debugging
