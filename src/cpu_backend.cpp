@@ -1,14 +1,15 @@
 #include <cpu_backend.hpp>
-#include <mkl_basic_operator.h>
+#include <mkl_vec.hpp>
+#include <mkl_intergral.hpp>
 
 namespace uca
 {
     template<class T> void cpu_backend_impl(cpu_backend<T>& cpu)
     {
         cpu.enable =  true;
-        cpu.VtAdd = mekil::VtAdd<T>;
-        cpu.integral_x = mekil::integral_x<T>;
-        cpu.integral_y = mekil::integral_y<T>;
+        cpu.VtAdd = mkl::vec::self_add<T>;
+        cpu.integral_x = mkl::integral_x<T>;
+        cpu.integral_y = mkl::integral_y<T>;
         // cpu.fft =
         // cpu.fft_outplace =
         // cpu.ifft =

@@ -25,40 +25,22 @@
     else if constexpr(is_c<T>){c(__VA_ARGS__);} \
     else if constexpr(is_z<T>){z(__VA_ARGS__);} \
     else{unreachable_constexpr_if();}
-namespace mekil
-{
-    template<class T> struct mkl_mapping{using type = T;};
-    template<> struct mkl_mapping<complex_t<float>>{using type = MKL_Complex8;};
-    template<> struct mkl_mapping<complex_t<double>>{using type = MKL_Complex16;};
-    template<class T> using mkl_t = typename mkl_mapping<T>::type;
 
-    template <typename T> void VtAdd(const int n, const T *x, T *y)
-    {
-        using Tmkl = mkl_t<T>;
-        REPEAT_CODE(T, vsAdd, vdAdd, vcAdd, vzAdd,
-            n, (Tmkl*)x, (Tmkl*)y, (Tmkl*)y
-        )
-    }
-    template <typename T> void integral_y(vec2<size_t> shape, T* image)
-    {
-        using Tmkl = mkl_t<T>;
-        const auto [ysize, xsize] = shape;
-        T* a = image;
-        T* b = image + xsize;
-        for(size_t y = 0; y < ysize-1; y++, a+=xsize, b +=xsize)
-            VtAdd<T>(xsize, a, b);
-    }
-    template <typename T> void integral_x(vec2<size_t> shape, T* image)
-    {
-        using Tmkl = mkl_t<T>;
-        const auto [ysize, xsize] = shape;
-        auto line_op = [xsize](T* p){
-            for(size_t x = 1; x < xsize; x++) p[x] += p[x - 1];
-        };
-        #pragma omp for
-        for(size_t y = 0; y < ysize; y++) line_op(image + y * xsize);
-    }
-    template <typename T> void VtSub(const int n, const T *x, T *y);
-    template <typename T> void VtMul(const int n, const T *x, T *y);
-    template <typename T> void VtDiv(const int n, const T *x, T *y);
-}
+#define __REPEAT_CODE(routing, T, func, ...) \
+    if      constexpr(is_s<T>){routing##s##func(__VA_ARGS__);} \
+    else if constexpr(is_d<T>){routing##d##func(__VA_ARGS__);} \
+    else if constexpr(is_c<T>){routing##c##func(__VA_ARGS__);} \
+    else if constexpr(is_z<T>){routing##z##func(__VA_ARGS__);} \
+    else     unreachable_constexpr_if();
+
+#define CBLAS_REPEAT_CODE(T, func, ...) __REPEAT_CODE(cblas_, T, func, __VA_ARGS__)
+#define MKL_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  mkl_, T, func, __VA_ARGS__)
+#define VEC_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  v, T, func, __VA_ARGS__)
+
+template<class T> struct mkl_mapping; 
+template<>struct mkl_mapping<float> {using type = float;};
+template<>struct mkl_mapping<double> {using type = double;};
+template<>struct mkl_mapping<std::complex<float>> {using type = MKL_Complex8;};
+template<>struct mkl_mapping<std::complex<double>> {using type = MKL_Complex16;};
+template<class T> using mkl_t = typename mkl_mapping<T>::type;
+

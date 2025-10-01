@@ -1,31 +1,8 @@
 #pragma once
-#include <mkl.h>
-#include <complex>
 #include <type_traist_notebook/type_traist.hpp>
+#include "mkl_basic_operator.h"
+#include <mkl.h>
 
-enum class matrix_major
-{
-    row_major,
-    col_major
-};
-#define __REPEAT_CODE(routing, T, func, ...) \
-    if      constexpr(is_s<T>){routing##s##func(__VA_ARGS__);} \
-    else if constexpr(is_d<T>){routing##d##func(__VA_ARGS__);} \
-    else if constexpr(is_c<T>){routing##c##func(__VA_ARGS__);} \
-    else if constexpr(is_z<T>){routing##z##func(__VA_ARGS__);} \
-    else     unreachable_constexpr_if();
-
-#define CBLAS_REPEAT_CODE(T, func, ...) __REPEAT_CODE(cblas_, T, func, __VA_ARGS__)
-#define MKL_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  mkl_, T, func, __VA_ARGS__)
-#define VEC_REPEAT_CODE(T, func, ...)   __REPEAT_CODE(  v, T, func, __VA_ARGS__)
-
-
-template<class T> struct mkl_mapping; 
-template<>struct mkl_mapping<float> {using type = float;};
-template<>struct mkl_mapping<double> {using type = double;};
-template<>struct mkl_mapping<std::complex<float>> {using type = MKL_Complex8;};
-template<>struct mkl_mapping<std::complex<double>> {using type = MKL_Complex16;};
-template<class T> using mkl_t = typename mkl_mapping<T>::type;
 
 template<class T> inline void copy_batch_strided(const MKL_INT N,
                                const T *X, const MKL_INT incX, const MKL_INT stridex,
@@ -34,55 +11,6 @@ template<class T> inline void copy_batch_strided(const MKL_INT N,
 {
     CBLAS_REPEAT_CODE(T, copy_batch_strided, N, X, incX, stridex, Y, incY, stridey, batch_size);
 }
-template <class T>
-inline void CenterCornerFlip(T *image, int widht, int height)
-{
-    const int sizeX = widht;
-    const int sizeY = height;
-    const int halfSizeX = sizeX / 2;
-    const int halfSizeY = sizeY / 2;
-    
-    T *pA = image;
-    T *pB = image + halfSizeX + sizeX % 2;
-    T *pC = image + (halfSizeY  + sizeY % 2) * sizeX;
-    T *pD = image + (halfSizeY  + sizeY % 2) * sizeX + halfSizeX + sizeX % 2;
-
-    for (int i = 0; i < halfSizeY; i++)
-    {
-        if constexpr (is_s<T>)
-        {
-            cblas_sswap(halfSizeX, pA, 1, pD, 1);
-            cblas_sswap(halfSizeX, pB, 1, pC, 1);
-        }
-        else if constexpr (is_c<T>)
-        {
-            cblas_cswap(halfSizeX, pA, 1, pD, 1);
-            cblas_cswap(halfSizeX, pB, 1, pC, 1);
-        }
-        else if constexpr (is_d<T>)
-        {
-            cblas_dswap(halfSizeX, pA, 1, pD, 1);
-            cblas_dswap(halfSizeX, pB, 1, pC, 1);
-        }
-        else if constexpr (is_z<T>)
-        {
-            cblas_zswap(halfSizeX, pA, 1, pD, 1);
-            cblas_zswap(halfSizeX, pB, 1, pC, 1);
-        }
-        pA += sizeX;
-        pD += sizeX;
-        pB += sizeX;
-        pC += sizeX;
-    }
-}
-
-template<class T> [[deprecated("use crop_image instead")]] inline void CropImage(T* pOut, const int ostride, const T* pIn, const int istride, const int sizex, const int sizey)
-{
-    //== 如果 crop image 包含最后一个元素，存在pOut越界的情况。(sizey 包含 pOut的最后一行)
-    // 可以从小的image 拷贝到大的， 反过来的话是不安全的
-    copy_batch_strided(sizex, pIn, 1, istride, pOut, 1, ostride, sizey);
-}
-
 
 template<class T> inline void crop_image(T* output, vec2<size_t> output_shape, vec2<size_t> output_offset, 
                  const T* input,  vec2<size_t> input_shape,  vec2<size_t> input_offset, int step_in = 1, int step_out = 1)
@@ -134,7 +62,55 @@ template<class TFrom, class TTo> inline void crop_to(TTo* output, vec2<size_t> o
 
 
 
+template <class T> inline void fftshift_even_only(T *image, size_t width, size_t height)
+{
+    const size_t sizeX = width;
+    const size_t sizeY = height;
+    
+    T *pA = image;
+    T *pB = image + sizeX/2;
+    T *pC = image + sizeY/2 * sizeX;
+    T *pD = image + sizeY/2 * sizeX + sizeX/2;
 
+    const size_t halfSizeX = (sizeX + 1) / 2;
+    const size_t halfSizeY = (sizeY + 1) / 2;
+    for (size_t i = 0; i < halfSizeY; i++)
+    {
+        CBLAS_REPEAT_CODE(T, swap, halfSizeX, pA, 1, pD, 1);
+        CBLAS_REPEAT_CODE(T, swap, halfSizeX, pB, 1, pC, 1);
+        pA += sizeX;
+        pD += sizeX;
+        pB += sizeX;
+        pC += sizeX;
+    }
+}
+template <class T> inline void fftshift(T *image, size_t width, size_t height)
+{
+    if((0 == width %2) && ( 0 == height %2)){
+        fftshift_even_only(image, width, height);
+        return;
+    }
+    const size_t sizeX = width;
+    const size_t sizeY = height;
+    
+    const size_t halfSizeX = (sizeX + 1) / 2;
+    const size_t halfSizeY = (sizeY + 1) / 2;
+    T *pA = image;
+    T *pB = image + halfSizeX;
+    T *pC = image + (sizeY - halfSizeY) * sizeX;
+    T *pD = image + halfSizeY * sizeX + halfSizeX;
+
+    std::vector<T> temp(halfSizeX * sizeY);
+    copy_batch_strided(halfSizeX, pA, 1, sizeX, temp.data(), 1, halfSizeX, sizeY);
+    
+    copy_batch_strided(sizeX - halfSizeX, pB, 1, sizeX, pC, 1, sizeX, halfSizeY);
+    copy_batch_strided(sizeX - halfSizeX, pD, 1, sizeX, pA, 1, sizeX, sizeY - halfSizeY);
+
+    pB = image + (sizeX - halfSizeX);
+    pD = image + (sizeY - halfSizeY) * sizeX + (sizeX - halfSizeX);
+    copy_batch_strided(halfSizeX, temp.data(), 1, halfSizeX, pD, 1, sizeX, halfSizeY);
+    copy_batch_strided(halfSizeX, temp.data() + halfSizeX * halfSizeY, 1, halfSizeX, pB, 1, sizeX, sizeY - halfSizeY);
+}
 template<class T, bool is_c_stly_memory_layout = false>
 inline void transpose(const T* input, T* output, const std::array<int,2>& shape)
 {
@@ -228,116 +204,3 @@ inline void permuteND(const TFrom* input, TTo* output,
     }
 }
 
-
-
-namespace mkl::vec
-{
-    template<class T> inline void add(int n, const T*a, const T*b, T* y)
-    {
-        VEC_REPEAT_CODE(T, Add, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
-    }
-    template<class T> inline void sub(int n, const T*a, const T*b, T* y)
-    {
-        VEC_REPEAT_CODE(T, Sub, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
-    }
-    template<class T> inline void mul(int n, const T*a, const T*b, T* y)
-    {
-        VEC_REPEAT_CODE(T, Mul, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
-    }
-    template<class T> inline void div(int n, const T*a, const T*b, T* y)
-    {
-        VEC_REPEAT_CODE(T, Div, n, reinterpret_cast<const mkl_t<T>*>(a), reinterpret_cast<const mkl_t<T>*>(b), reinterpret_cast<mkl_t<T>*>(y));
-    }
-    template<class T> inline void add(int n, const T a, T* x)
-    {
-        //== TODO :SIMD
-        std::array<mkl_t<T>, (32 * sizeof(std::complex<double>) / sizeof(T))> buf; 
-        buf.fill(a);
-        int ibegin = 0;
-        while((ibegin + buf.size()) < n){
-            mkl::vec::add(buf.size(), buf.data(), x);
-            x += buf.size();
-            ibegin += buf.size();
-        }
-        mkl::vec::add(n - ibegin, buf.data(), x);
-    }
-    template<class T> inline void sub(int n, const T a, T* x)
-    {
-        //== TODO :SIMD
-        std::array<mkl_t<T>, (32 * sizeof(std::complex<double>) / sizeof(T))> buf; 
-        buf.fill(a);
-        int ibegin = 0;
-        while((ibegin + buf.size()) < n){
-            mkl::vec::sub(buf.size(), buf.data(), x);
-            x += buf.size();
-            ibegin += buf.size();
-        }
-        mkl::vec::sub(n - ibegin, buf.data(), x);
-    }
-    template<class T> inline void mul(int n, const T a, T* x, int inc = 1)
-    {
-        CBLAS_REPEAT_CODE(T, scal, n, a, x, inc);
-    }
-    template<class T> inline void div(int n, const T a, T* x, int inc = 1)
-    {
-        CBLAS_REPEAT_CODE(T, scal, n, (T(1)/a), x, inc);
-    }
-};
-
-template<class T> inline void VecDiv(int n, T*a, T*b, T* y)
-{
-    if constexpr(is_s<T>)
-    {
-        vsDiv(n, a, b, y);
-    }
-    else if constexpr(is_d<T>)
-    {
-        vdDiv(n, a, b, y);
-    }
-    else if constexpr(is_c<T>)
-    {
-        vcDiv(n, (MKL_Complex8*)a, (MKL_Complex8*)b, (MKL_Complex8*)y);
-    }
-    else if constexpr(is_z<T>)
-    {
-        vzDiv(n, (MKL_Complex16*)a, (MKL_Complex16*)b, (MKL_Complex16*)y);
-    }
-}
-template<class T> inline void VecMul(int n, T*a, T*b, T* y)
-{
-    if constexpr(is_s<T>)
-    {
-        vsMul(n, a, b, y);
-    }
-    else if constexpr(is_d<T>)
-    {
-        vdMul(n, a, b, y);
-    }
-    else if constexpr(is_c<T>)
-    {
-        vcMul(n, (MKL_Complex8*)a, (MKL_Complex8*)b, (MKL_Complex8*)y);
-    }
-    else if constexpr(is_z<T>)
-    {
-        vzMul(n, (MKL_Complex16*)a, (MKL_Complex16*)b, (MKL_Complex16*)y);
-    }
-}
-template<class T> inline void VecScala(int n, const T a, T* x, int inc = 1)
-{
-    if constexpr(is_s<T>)
-    {
-        cblas_sscal(n, a, x, inc);
-    }
-    else if constexpr(is_d<T>)
-    {
-        cblas_dscal(n, a, x, inc);
-    }
-    else if constexpr(is_c<T>)
-    {
-        cblas_cscal(n, (MKL_Complex8*)&a, (MKL_Complex8*)x, inc);
-    }
-    else if constexpr(is_z<T>)
-    {
-        cblas_zscal(n, (MKL_Complex16*)&a, (MKL_Complex16*)x, inc);
-    }
-}

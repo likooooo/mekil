@@ -1,10 +1,10 @@
-#include <vector>
-#include <numeric>
-#include <functional>
 #include <mkl_wrapper.hpp>
-#include <iostream>
-#include <vector>
+#include <mkl_vec.hpp>
+#include <functional>
 #include <stdexcept>
+#include <iostream>
+#include <numeric>
+#include <vector>
 #include <string>
 #include <cmath>
 
