@@ -1,6 +1,7 @@
 add_library(mekil SHARED cpu_backend.cpp)
 set_target_properties(mekil PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}) 
 target_link_libraries(mekil PUBLIC ${MKL_IMPORTED_TARGETS})
+
 if(FFTW_FOUND)
     target_link_libraries(mekil PUBLIC PkgConfig::FFTW)
     target_include_directories(mekil PUBLIC ${FFTW_INCLUDE_DIRS})

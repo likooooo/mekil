@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # MKL
-find_package(MKL CONFIG REQUIRED PATHS /opt/intel/oneapi/mkl/latest/)
+find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
 message(STATUS "Imported oneMKL targets: ${MKL_IMPORTED_TARGETS}")
 
 # FFT
